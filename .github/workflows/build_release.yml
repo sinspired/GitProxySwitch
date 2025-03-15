@@ -40,7 +40,7 @@ jobs:
       - name: Build executables (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          pyinstaller app.py --onefile -i icon/logo.ico -w --clean -n "GitProxySwitch" --add-data "./icon/:icon"
+          pyinstaller GitProxySwitch.spec
           mv "dist/GitProxySwitch" "dist/GitProxySwitch-Linux-x64"
           zip -j "GitProxySwitch-Linux-x64.zip" dist/*-Linux-x64
 
@@ -50,7 +50,7 @@ jobs:
           if (Test-Path -Path "dist") {
               Remove-Item -Recurse -Force "dist"
           }
-          pyinstaller app.py --onefile -i icon/logo.ico -w --clean -n "GitProxySwitch" --add-data "./icon/:icon"
+          pyinstaller GitProxySwitch.spec
           Move-Item "dist\GitProxySwitch.exe" "dist\GitProxySwitch-Windows-x64.exe"
           Compress-Archive -Path dist\*-Windows-x64.exe -DestinationPath "GitProxySwitch-Windows-x64.zip"
         shell: pwsh
@@ -58,7 +58,7 @@ jobs:
       - name: Build executables (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          pyinstaller app.py --onefile -i icon/logo.icns -w --clean -n "GitProxySwitch" --add-data "./icon/:icon"
+          pyinstaller GitProxySwitch.spec
           mv "dist/GitProxySwitch" "dist/GitProxySwitch-macOS-x64"
           zip -j "GitProxySwitch-macOS-x64.zip" dist/*-macOS-x64
 
