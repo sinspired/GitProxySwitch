@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>ContextMenu</class>
- <widget class="QWidget" name="ContextMenu">
+ <class>ContextMenuWidget</class>
+ <widget class="QWidget" name="ContextMenuWidget">
+  <property name="windowModality">
+   <enum>Qt::WindowModality::WindowModal</enum>
+  </property>
   <property name="enabled">
    <bool>true</bool>
   </property>
@@ -14,7 +17,7 @@
    </rect>
   </property>
   <property name="sizePolicy">
-   <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+   <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
@@ -27,8 +30,8 @@
   </property>
   <property name="maximumSize">
    <size>
-    <width>250</width>
-    <height>220</height>
+    <width>190</width>
+    <height>212</height>
    </size>
   </property>
   <property name="font">
@@ -36,8 +39,17 @@
     <kerning>true</kerning>
    </font>
   </property>
+  <property name="contextMenuPolicy">
+   <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
+  </property>
   <property name="windowTitle">
    <string>ContextMenu</string>
+  </property>
+  <property name="toolTip">
+   <string/>
+  </property>
+  <property name="styleSheet">
+   <string notr="true"/>
   </property>
   <property name="toolTipsVisible" stdset="0">
    <bool>false</bool>
@@ -47,13 +59,13 @@
     <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
    </property>
    <property name="leftMargin">
-    <number>2</number>
+    <number>0</number>
    </property>
    <property name="topMargin">
     <number>9</number>
    </property>
    <property name="rightMargin">
-    <number>2</number>
+    <number>0</number>
    </property>
    <property name="bottomMargin">
     <number>9</number>
@@ -68,13 +80,13 @@
      </property>
      <property name="minimumSize">
       <size>
-       <width>0</width>
+       <width>180</width>
        <height>30</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>16777215</width>
+       <width>200</width>
        <height>30</height>
       </size>
      </property>
@@ -110,20 +122,20 @@
    <item>
     <widget class="QPushButton" name="proxyButton">
      <property name="sizePolicy">
-      <sizepolicy hsizetype="MinimumExpanding" vsizetype="Maximum">
+      <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
      <property name="minimumSize">
       <size>
-       <width>0</width>
+       <width>180</width>
        <height>40</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>1000</width>
+       <width>200</width>
        <height>50</height>
       </size>
      </property>
@@ -192,13 +204,13 @@
        </property>
        <property name="minimumSize">
         <size>
-         <width>0</width>
+         <width>180</width>
          <height>50</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
-         <width>1000</width>
+         <width>200</width>
          <height>50</height>
         </size>
        </property>
@@ -250,7 +262,7 @@
           </property>
           <property name="maximumSize">
            <size>
-            <width>1000</width>
+            <width>100</width>
             <height>24</height>
            </size>
           </property>
@@ -341,14 +353,23 @@
          </widget>
         </item>
        </layout>
+       <zorder>portInput</zorder>
+       <zorder>portListButton</zorder>
+       <zorder>portlabel</zorder>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="autoStartButton">
        <property name="minimumSize">
         <size>
-         <width>0</width>
+         <width>180</width>
          <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>200</width>
+         <height>16777215</height>
         </size>
        </property>
        <property name="text">
@@ -358,7 +379,7 @@
         <bool>true</bool>
        </property>
        <property name="flat">
-        <bool>true</bool>
+        <bool>false</bool>
        </property>
       </widget>
      </item>
@@ -366,8 +387,14 @@
       <widget class="QPushButton" name="exitButton">
        <property name="minimumSize">
         <size>
-         <width>0</width>
+         <width>180</width>
          <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>200</width>
+         <height>16777215</height>
         </size>
        </property>
        <property name="text">
@@ -377,7 +404,7 @@
         <bool>true</bool>
        </property>
        <property name="flat">
-        <bool>true</bool>
+        <bool>false</bool>
        </property>
       </widget>
      </item>

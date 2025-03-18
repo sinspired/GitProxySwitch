@@ -1,3 +1,4 @@
+# app.py
 import concurrent.futures
 import os
 import socket
@@ -6,36 +7,34 @@ import sys
 import winreg
 from typing import Dict, Optional, Tuple
 
-from PySide6.QtCore import QPoint, Qt, QSharedMemory
+from PySide6.QtCore import QPoint, QSharedMemory, Qt
 from PySide6.QtGui import QAction, QColor, QIcon, QLinearGradient, QPainter
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
     QMenu,
     QSystemTrayIcon,
+    QWidget,
     QWidgetAction,
 )
 
-from ContextMenu_ui import Ui_ContextMenu
+from ContextMenu_ui import Ui_ContextMenuWidget
 
 
-class MainWindow(QMenu):
-    def __init__(self):
-        super(MainWindow, self).__init__()
-        self.ui = Ui_ContextMenu()
+class ContextMenuWidget(QWidget):
+    """单独的上下文菜单窗口部件，用于包含UI组件"""
+
+    def __init__(self, parent=None):
+        super(ContextMenuWidget, self).__init__(parent)
+        self.ui = Ui_ContextMenuWidget()
         self.ui.setupUi(self)
 
-        # 初始化变量
-        self.default_port = 10808
-        self.current_port = self.default_port
-        self.preset_port: Dict[str, str] = {
-            "V2Ray": "10808",
-            "Clash": "7890",
-            "SingBox": "10809",
-        }
+        # 应用样式表
+        self.setup_style()
 
-        # 设置样式表
-        self.setStyleSheet(
+    def setup_style(self):
+        """设置控件样式"""
+        self.ui.proxyButton.setStyleSheet(
             """
             #proxyButton {
                 border-radius: 0px;
@@ -44,6 +43,11 @@ class MainWindow(QMenu):
             #proxyButton:checked {
                 background-color: rgb(0, 197, 144);
             }
+            """
+        )
+
+        self.ui.autoStartButton.setStyleSheet(
+            """
             #autoStartButton {
                 border-radius: 0px;
                 background-color: transparent;
@@ -55,6 +59,11 @@ class MainWindow(QMenu):
                 background-color: rgba(130, 130, 130, 0.08);
                 color: #836d6d;
             }
+            """
+        )
+
+        self.ui.exitButton.setStyleSheet(
+            """
             #exitButton {
                 border-radius: 0px;
                 background-color: transparent;
@@ -62,18 +71,36 @@ class MainWindow(QMenu):
             #exitButton:hover {
                 background-color: rgba(130, 130, 130, 0.08);
             }
-        """
+            """
         )
 
-        self.status_label = self.ui.statusLabel
-        self.proxy_button = self.ui.proxyButton
-        self.port_input = self.ui.portInput
-        self.port_list_button = self.ui.portListButton
-        self.auto_start_button = self.ui.autoStartButton
-        self.exit_button = self.ui.exitButton
 
-        # 设置自定义端口初始值
-        self.port_input.setText(str(self.current_port))
+class ContextMenuAction(QWidgetAction):
+    """将UI控件包装为QAction以便在QMenu中使用"""
+
+    def __init__(self, parent=None):
+        super(ContextMenuAction, self).__init__(parent)
+        self.context_menu_widget = ContextMenuWidget()
+        self.setDefaultWidget(self.context_menu_widget)
+
+    def get_ui(self):
+        """获取UI控件引用"""
+        return self.context_menu_widget.ui
+
+
+class MainWindow:
+    def __init__(self):
+        # 初始化变量
+        self.default_port = 10808
+        self.current_port = self.default_port
+        self.preset_port: Dict[str, str] = {
+            "V2Ray": "10808",
+            "Clash": "7890",
+            "SingBox": "10809",
+        }
+
+        # 创建托盘菜单
+        self.create_tray_menu()
 
         # 创建系统托盘图标
         self.setup_tray()
@@ -84,6 +111,42 @@ class MainWindow(QMenu):
         # 检查开机自启状态
         self.check_auto_start_status()
 
+        self.show_startup_message()
+
+    def show_startup_message(self):
+        self.tray_icon.showMessage(
+            "Git Proxy Switch",
+            "程序已启动并驻留在系统托盘",
+            QSystemTrayIcon.MessageIcon.Information,
+            10,
+        )
+
+    def create_tray_menu(self):
+        """创建托盘菜单"""
+        self.tray_menu = QMenu()
+        self.tray_menu.setStyleSheet(
+            """
+            QMenu {
+            border-radius: 0px;
+            }
+            """
+        )
+        # 创建控件Action
+        self.menu_action = ContextMenuAction(self.tray_menu)
+        self.tray_menu.addAction(self.menu_action)
+
+        # 获取UI引用
+        self.ui = self.menu_action.get_ui()
+        self.status_label = self.ui.statusLabel
+        self.proxy_button = self.ui.proxyButton
+        self.port_input = self.ui.portInput
+        self.port_list_button = self.ui.portListButton
+        self.auto_start_button = self.ui.autoStartButton
+        self.exit_button = self.ui.exitButton
+
+        # 设置初始端口值
+        self.ui.portInput.setText(str(self.current_port))
+
         # 连接信号
         self.setup_connections()
 
@@ -92,22 +155,25 @@ class MainWindow(QMenu):
         self.tray_icon = QSystemTrayIcon()
         icon_path = resource_path("Icon/status_off.svg")
         self.tray_icon.setIcon(QIcon(icon_path))
+        self.tray_icon.setContextMenu(self.tray_menu)
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
         self.tray_icon.show()
 
     def setup_connections(self):
         """设置信号连接"""
-        self.proxy_button.clicked.connect(self.toggle_proxy)
-        self.port_input.editingFinished.connect(self.update_port)
-        self.port_list_button.clicked.connect(self.show_port_list)
-        self.auto_start_button.clicked.connect(self.toggle_auto_start)
-        self.exit_button.clicked.connect(QApplication.instance().quit)
+        self.ui.proxyButton.clicked.connect(self.toggle_proxy)
+        self.ui.portInput.editingFinished.connect(self.update_port)
+        self.ui.portListButton.clicked.connect(self.show_port_list)
+        self.ui.autoStartButton.clicked.connect(self.toggle_auto_start)
+        self.ui.exitButton.clicked.connect(QApplication.instance().quit)
 
     def on_tray_icon_activated(self, reason):
         """处理托盘图标激活事件"""
         if reason == QSystemTrayIcon.ActivationReason.Context:
             geometry = self.tray_icon.geometry()
-            self.popup(QPoint(geometry.x(), geometry.y() - self.height()))
+            self.tray_menu.popup(
+                QPoint(geometry.x(), geometry.y() - self.tray_menu.height())
+            )
         elif reason == QSystemTrayIcon.ActivationReason.Trigger:
             self.proxy_button.setChecked(not self.proxy_button.isChecked())
             self.toggle_proxy()
@@ -118,7 +184,7 @@ class MainWindow(QMenu):
         """更新git代理状态和提示信息"""
         port = port if port is not None else self.current_port
         proxy_url = f"http://127.0.0.1:{port}"
-        self.port_input.setText(str(port))
+        self.ui.portInput.setText(str(port))
         port_name = {v: k for k, v in self.preset_port.items()}.get(str(port), "其他")
         tooltip = "Git Proxy Switch"
         tooltip += "\n端口: {}".format(port)
@@ -146,22 +212,22 @@ class MainWindow(QMenu):
 
             status_label_text = f'<span style="color: green;">git代理已{"切换" if editMode else "启用"}<br/>{proxy_url}</span>'
             proxy_button_text = "禁用git代理"
-            self.proxy_button.setChecked(False)
+            self.ui.proxyButton.setChecked(False)
 
         else:
             tooltip += "\n状态: 已禁用"
 
             status_label_text = '<span style="color: gray;">git代理已禁用</span>'
             proxy_button_text = "启用git代理"
-            self.proxy_button.setChecked(True)
+            self.ui.proxyButton.setChecked(True)
             self.tray_icon.setIcon(QIcon(resource_path("Icon/status_off.svg")))
 
         tooltip += "\n\n左键点击: git代理开关"
         tooltip += "\n右键点击: 快捷菜单"
 
-        self.status_label.setText(status_label_text)
+        self.ui.statusLabel.setText(status_label_text)
         self.tray_icon.setToolTip(tooltip)
-        self.proxy_button.setText(proxy_button_text)
+        self.ui.proxyButton.setText(proxy_button_text)
 
     def get_git_proxy_status(self) -> Tuple[bool, Optional[str]]:
         try:
@@ -217,7 +283,7 @@ class MainWindow(QMenu):
     def toggle_proxy(self, editMode=False):
         """切换git代理事件"""
         try:
-            if self.proxy_button.isChecked():
+            if self.ui.proxyButton.isChecked():
                 # 禁用git代理并更新标签和提示信息
                 self.set_git_proxy(False)
                 self.update_git_proxy_status_and_tooltip(False)
@@ -229,14 +295,14 @@ class MainWindow(QMenu):
                 )
         except (subprocess.SubprocessError, OSError) as e:
             print(f"操作失败: {str(e)}")
-            self.status_label.setText(
+            self.ui.statusLabel.setText(
                 f'<span style="color: red;">操作失败: {str(e)}</span>'
             )
 
     def update_port(self):
         """更新git端口设置"""
         try:
-            port = self.port_input.text()
+            port = self.ui.portInput.text()
             # 检查是否为空或非数字
             if not port or not port.strip() or self.current_port == int(port):
                 # 未修改端口，直接返回
@@ -247,34 +313,46 @@ class MainWindow(QMenu):
                 # 端口有效，保存设置
                 self.current_port = port
                 isEdit = True
-                if self.proxy_button.isChecked():
+                if self.ui.proxyButton.isChecked():
                     # 更新状态信息
-                    self.proxy_button.setChecked(False)
+                    self.ui.proxyButton.setChecked(False)
                     isEdit = False
 
                 # 更新代理设置
                 self.toggle_proxy(isEdit)
             else:
                 # 端口无效，恢复上一个有效端口
-                self.port_input.setText(str(self.current_port))
-                self.status_label.setText(
+                self.ui.portInput.setText(str(self.current_port))
+                self.ui.statusLabel.setText(
                     f'<span style="color: red; font-weight: bold;">无效端口: {port}，应为1-65535</span>'
                 )
         except (ValueError, TypeError):
             # 输入无效，恢复上一个有效端口
-            self.port_input.setText(str(self.current_port))
-            self.status_label.setText(
+            self.ui.portInput.setText(str(self.current_port))
+            self.ui.statusLabel.setText(
                 '<span style="color: red; font-weight: bold;">请输入有效的数字端口</span>'
             )
 
     def show_port_list(self):
         """显示端口列表"""
-        menu = QMenu(self)
+        menu = QMenu(self.port_list_button)  # 确保 QMenu 的父对象正确
         menu.setStyleSheet(
-            "QMenu::icon{ padding-left: 18px; }"
-            "QMenu::item { padding: 4px 10px 4px 10px;}  "
-            "QMenu::item:selected { background-color: rgba(130, 130, 130, 0.08); }"
+            """
+            QMenu {
+                border-radius: 6px;
+            }
+            QMenu::icon { 
+                padding-left: 18px; 
+            }
+            QMenu::item { 
+                padding: 4px 10px; 
+            }
+            QMenu::item:selected { 
+                background-color: rgba(130, 130, 130, 0.08); 
+            }
+            """
         )
+
         # 自定义标题行
         title_widget = QWidgetAction(menu)
         title_label = QLabel("常用端口")
@@ -288,8 +366,8 @@ class MainWindow(QMenu):
 
         # 添加端口列表项
         for name, port in self.preset_port.items():
-            action = QAction(name, self)
-            action.triggered.connect(lambda checked, p=port, a=action: self.set_port(p))
+            action = QAction(name, menu)
+            action.triggered.connect(lambda checked, p=port: self.set_port(p))
 
             menu.addAction(action)
 
@@ -423,7 +501,7 @@ if __name__ == "__main__":
     shared_memory = QSharedMemory("GitProxyManager")
     if not shared_memory.create(1):
         print("应用程序已经在运行中。")
-        
+
         sys.exit(0)
 
     app = QApplication(sys.argv)
