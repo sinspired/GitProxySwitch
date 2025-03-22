@@ -13,6 +13,10 @@ Git Proxy Switch 是一个用于管理 Git 代理设置的工具，支持在多�
   - 设置自定义代理端口
   - 开机自启动设置
 
+## 截图
+
+![alt text](screenshot.png)
+
 ## 安装
 
 1. 克隆仓库到本地：
