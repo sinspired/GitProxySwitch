@@ -341,14 +341,14 @@ class MainWindow:
             QMenu {
                 border-radius: 6px;
             }
-            QMenu::icon { 
-                padding-left: 18px; 
+            QMenu::icon {
+                padding-left: 18px;
             }
-            QMenu::item { 
-                padding: 4px 10px; 
+            QMenu::item {
+                padding: 4px 10px;
             }
-            QMenu::item:selected { 
-                background-color: rgba(130, 130, 130, 0.08); 
+            QMenu::item:selected {
+                background-color: rgba(130, 130, 130, 0.08);
             }
             """
         )
