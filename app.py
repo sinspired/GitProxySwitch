@@ -8,7 +8,7 @@ import sys
 from typing import Dict, Optional, Tuple
 
 from PySide6.QtCore import QPoint, QSharedMemory, Qt
-from PySide6.QtGui import QAction, QColor, QIcon, QLinearGradient, QPainter
+from PySide6.QtGui import QAction, QColor, QIcon, QLinearGradient, QPainter, QCursor
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -176,16 +176,50 @@ class MainWindow:
         self.ui.autoStartButton.clicked.connect(self.toggle_auto_start)
         self.ui.exitButton.clicked.connect(QApplication.instance().quit)
 
+    # def on_tray_icon_activated(self, reason):
+    #     """处理托盘图标激活事件"""
+    #     if reason == QSystemTrayIcon.ActivationReason.Context:
+    #         geometry = self.tray_icon.geometry()
+    #         self.tray_menu.popup(
+    #             QPoint(geometry.x(), geometry.y() - self.tray_menu.height())
+    #         )
+    #     elif reason == QSystemTrayIcon.ActivationReason.Trigger:
+    #         self.proxy_button.setChecked(not self.proxy_button.isChecked())
+    #         self.toggle_proxy()
+
     def on_tray_icon_activated(self, reason):
         """处理托盘图标激活事件"""
         if reason == QSystemTrayIcon.ActivationReason.Context:
             geometry = self.tray_icon.geometry()
-            self.tray_menu.popup(
-                QPoint(geometry.x(), geometry.y() - self.tray_menu.height())
-            )
+            cursor_pos = QCursor.pos()  # 获取光标位置作为备选
+
+            if platform.system() == "Windows":
+                # Windows: 菜单显示在图标上方
+                popup_point = QPoint(
+                    geometry.x(), geometry.y() - self.tray_menu.height()
+                )
+            else:
+                # Linux: 菜单显示在图标下方
+                popup_point = QPoint(geometry.x(), geometry.y() + geometry.height())
+
+                # 如果几何信息看起来不正确，使用光标位置
+                if geometry.isNull() or geometry.x() == 0 and geometry.y() == 0:
+                    popup_point = cursor_pos
+
+            self.tray_menu.popup(popup_point)
         elif reason == QSystemTrayIcon.ActivationReason.Trigger:
             self.proxy_button.setChecked(not self.proxy_button.isChecked())
             self.toggle_proxy()
+
+    # # 直接使用光标位置
+    # def on_tray_icon_activated(self, reason):
+    #     """处理托盘图标激活事件"""
+    #     if reason == QSystemTrayIcon.ActivationReason.Context:
+    #         cursor_pos = QCursor.pos()  # 获取当前光标位置
+    #         self.tray_menu.popup(cursor_pos)
+    #     elif reason == QSystemTrayIcon.ActivationReason.Trigger:
+    #         self.proxy_button.setChecked(not self.proxy_button.isChecked())
+    #         self.toggle_proxy()
 
     def update_git_proxy_status_and_tooltip(
         self, git_proxy_enabled: bool, port: int = None, editMode=False
