@@ -1,7 +1,5 @@
 # app.py
 import concurrent.futures
-from errno import EKEYEXPIRED
-from math import e
 import os
 import platform
 import socket
@@ -10,7 +8,7 @@ import sys
 from typing import Dict, Optional, Tuple
 
 from PySide6.QtCore import QPoint, QSharedMemory, Qt
-from PySide6.QtGui import QAction, QColor, QIcon, QLinearGradient, QPainter, QCursor
+from PySide6.QtGui import QAction, QColor, QCursor, QIcon, QLinearGradient, QPainter
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -123,10 +121,7 @@ class MainWindow:
         self.toggle_proxy_action = None
 
         # 创建托盘菜单
-        if self.is_linux:
-            self.create_linux_tray_menu()
-        else:
-            self.create_tray_menu()
+        self.create_tray_menu()
 
         # 创建系统托盘图标
         self.setup_tray()
@@ -160,6 +155,44 @@ class MainWindow:
             }
             """
         )
+        if self.is_linux:
+            self.setup_linux_menu()
+        else:
+            self.setup_windows_menu()
+
+    def setup_linux_menu(self):
+        """设置Linux托盘菜单"""
+        # 状态文本显示
+        self.status_action = QAction("代理状态: 未启用", self.tray_menu)
+        self.status_action.setEnabled(False)
+        self.tray_menu.addAction(self.status_action)
+
+        self.tray_menu.addSeparator()
+
+        # 切换代理按钮
+        self.toggle_proxy_action = QAction("启用git代理", self.tray_menu)
+        self.toggle_proxy_action.triggered.connect(self.toggle_proxy)
+        self.tray_menu.addAction(self.toggle_proxy_action)
+
+        # 端口设置
+        port_menu = QMenu("设置端口", self.tray_menu)
+        self.tray_menu.addMenu(port_menu)
+
+        # 添加预设端口
+        for name, port in self.preset_port.items():
+            action = QAction(f"{name}: {port}", port_menu)
+            action.triggered.connect(lambda checked, p=port: self.set_port(p))
+            port_menu.addAction(action)
+
+        self.tray_menu.addSeparator()
+
+        # 添加退出选项
+        self.exit_action = QAction("退出", self.tray_menu)
+        self.exit_action.triggered.connect(QApplication.instance().quit)
+        self.tray_menu.addAction(self.exit_action)
+
+    def setup_windows_menu(self):
+        """设置Windows托盘菜单"""
         # 创建控件Action
         self.menu_action = ContextMenuAction(self.tray_menu)
         self.tray_menu.addAction(self.menu_action)
@@ -202,7 +235,6 @@ class MainWindow:
         """处理托盘图标激活事件"""
         if reason == QSystemTrayIcon.ActivationReason.Context:
             # 右键点击 - 显示菜单
-            # 在Linux系统上，手动定位菜单位置
             if self.is_linux:
                 cursor_pos = QCursor.pos()
                 self.tray_menu.popup(cursor_pos)
@@ -221,58 +253,12 @@ class MainWindow:
                 self.proxy_button.setChecked(not self.proxy_button.isChecked())
                 self.toggle_proxy()
 
-    def create_linux_tray_menu(self):
-        """为Linux创建特殊处理的托盘菜单"""
-        self.tray_menu = QMenu()
-
-        # 为Linux设置特定样式
-        self.tray_menu.setStyleSheet(
-            """
-            QMenu {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #cccccc;
-                min-width: 250px;
-                padding: 5px;
-            }
-            QMenu::item {
-                padding: 5px 10px;
-            }
-            QMenu::item:selected {
-                background-color: #e0e0e0;
-            }
-            """
-        )
-
-        # 创建普通菜单项而不是自定义控件
-        # 状态文本显示
-        self.status_action = QAction("代理状态: 未启用", self.tray_menu)
-        self.status_action.setEnabled(False)
-        self.tray_menu.addAction(self.status_action)
-
-        self.tray_menu.addSeparator()
-
-        # 切换代理按钮
-        self.toggle_proxy_action = QAction("启用git代理", self.tray_menu)
-        self.toggle_proxy_action.triggered.connect(self.toggle_proxy)
-        self.tray_menu.addAction(self.toggle_proxy_action)
-
-        # 端口设置
-        port_menu = QMenu("设置端口", self.tray_menu)
-        self.tray_menu.addMenu(port_menu)
-
-        # 添加预设端口
-        for name, port in self.preset_port.items():
-            action = QAction(f"{name}: {port}", port_menu)
-            action.triggered.connect(lambda checked, p=port: self.set_port(p))
-            port_menu.addAction(action)
-
-        self.tray_menu.addSeparator()
-
-        # 添加退出选项
-        self.exit_action = QAction("退出", self.tray_menu)
-        self.exit_action.triggered.connect(QApplication.instance().quit)
-        self.tray_menu.addAction(self.exit_action)
+    def update_menu_status(self, git_proxy_enabled: bool, port: int = None):
+        """更新菜单状态"""
+        if self.is_linux:
+            self.update_linux_menu_status(git_proxy_enabled, port)
+        else:
+            self.update_git_proxy_status_and_tooltip(git_proxy_enabled, port)
 
     def update_linux_menu_status(self, git_proxy_enabled: bool, port: int = None):
         """更新Linux菜单状态"""
@@ -301,12 +287,6 @@ class MainWindow:
         self, git_proxy_enabled: bool, port: int = None, editMode=False
     ):
         """更新git代理状态和提示信息"""
-        if self.is_linux:
-            # Linux系统下更新菜单状态
-            self.update_linux_menu_status(git_proxy_enabled, port)
-            return
-
-        # 以下是Windows系统的处理逻辑
         port = port if port is not None else self.current_port
         proxy_url = f"http://127.0.0.1:{port}"
         self.ui.portInput.setText(str(port))
@@ -380,17 +360,9 @@ class MainWindow:
         proxy_running, port_name_openning, port_openning = self._detect_proxy_port()
         if proxy_running:
             self.set_git_proxy(True, port_openning)
-            if self.is_linux:
-                self.update_linux_menu_status(True, port_openning)
-            else:
-                self.update_git_proxy_status_and_tooltip(True, port_openning)
+            self.update_menu_status(True, port_openning)
         else:
-            if self.is_linux:
-                self.update_linux_menu_status(git_proxy_enabled, current_port)
-            else:
-                self.update_git_proxy_status_and_tooltip(
-                    git_proxy_enabled, current_port
-                )
+            self.update_menu_status(git_proxy_enabled, current_port)
 
     def set_git_proxy(self, switch: bool = True, port: int = None):
         """设置/取消git代理"""
@@ -425,28 +397,14 @@ class MainWindow:
             # 获取当前代理状态
             git_proxy_enabled, _ = self.get_git_proxy_status()
 
-            if self.is_linux:
-                # Linux系统下的处理
-                if git_proxy_enabled:
-                    # 当前已启用，则禁用
-                    self.set_git_proxy(False)
-                    self.update_linux_menu_status(False)
-                else:
-                    # 当前已禁用，则启用
-                    self.set_git_proxy(True, self.current_port)
-                    self.update_linux_menu_status(True, self.current_port)
+            if git_proxy_enabled:
+                # 当前已启用，则禁用
+                self.set_git_proxy(False)
+                self.update_menu_status(False)
             else:
-                # Windows系统下的处理
-                if self.ui.proxyButton.isChecked():
-                    # 禁用git代理并更新标签和提示信息
-                    self.set_git_proxy(False)
-                    self.update_git_proxy_status_and_tooltip(False)
-                else:
-                    # 启用git代理并更新标签和提示信息
-                    self.set_git_proxy(True, self.current_port)
-                    self.update_git_proxy_status_and_tooltip(
-                        True, self.current_port, editMode
-                    )
+                # 当前已禁用，则启用
+                self.set_git_proxy(True, self.current_port)
+                self.update_menu_status(True, self.current_port)
         except (subprocess.SubprocessError, OSError) as e:
             print(f"操作失败: {str(e)}")
             if not self.is_linux:
@@ -553,14 +511,9 @@ class MainWindow:
 
     def set_port(self, port):
         """设置端口并更新"""
-        if self.is_linux:
-            # Linux系统下已通过菜单实现端口列表
-            self.current_port = port
-            self.set_git_proxy(port=self.current_port)
-            self.update_linux_menu_status(git_proxy_enabled=True, port=self.current_port)
-        else:
-            self.port_input.setText(port)
-            self.update_port()
+        self.current_port = port
+        self.set_git_proxy(port=self.current_port)
+        self.update_menu_status(git_proxy_enabled=True, port=self.current_port)
 
     def toggle_auto_start(self):
         """设置/取消开机自启"""
@@ -616,7 +569,7 @@ class MainWindow:
                 self.auto_start_button.setText("设置开机自启动")
             finally:
                 winreg.CloseKey(key)
-        except WindowsError:
+        except Exception:
             # 如果无法访问注册表，默认为未启用
             self.auto_start_button.setChecked(False)
             self.auto_start_button.setText("设置开机自启动")
