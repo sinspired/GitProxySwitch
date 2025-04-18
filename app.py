@@ -1,10 +1,10 @@
 # app.py
 import concurrent.futures
 import os
+import platform
 import socket
 import subprocess
 import sys
-import winreg
 from typing import Dict, Optional, Tuple
 
 from PySide6.QtCore import QPoint, QSharedMemory, Qt
@@ -19,6 +19,11 @@ from PySide6.QtWidgets import (
 )
 
 from ContextMenu_ui import Ui_ContextMenuWidget
+
+if platform.system() == "Windows":
+    import winreg
+else:
+    winreg = None
 
 
 class ContextMenuWidget(QWidget):
@@ -109,7 +114,11 @@ class MainWindow:
         self.init_git_proxy_status_and_tooltip()
 
         # 检查开机自启状态
-        self.check_auto_start_status()
+        if platform.system() != "Windows":
+            self.auto_start_button.setEnabled(False)
+            self.auto_start_button.setVisible(False)
+        else:
+            self.check_auto_start_status()
 
         self.show_startup_message()
 
@@ -153,7 +162,7 @@ class MainWindow:
     def setup_tray(self):
         """设置系统托盘"""
         self.tray_icon = QSystemTrayIcon()
-        icon_path = resource_path("Icon/status_off.svg")
+        icon_path = resource_path("icon/status_off.svg")
         self.tray_icon.setIcon(QIcon(icon_path))
         self.tray_icon.setContextMenu(self.tray_menu)
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
@@ -196,16 +205,16 @@ class MainWindow:
             proxy_running, proxy_name, proxy_port = self._detect_proxy_port()
             if proxy_running:
                 if int(proxy_port) == int(port):
-                    self.tray_icon.setIcon(QIcon(resource_path("Icon/status_ok.svg")))
+                    self.tray_icon.setIcon(QIcon(resource_path("icon/status_ok.svg")))
                 else:
                     tooltip += "\n"
                     tooltip += "\n- 当前端口 {} 不可用".format(port)
                     tooltip += "\n- {} : {} 正在运行".format(proxy_name, proxy_port)
                     self.tray_icon.setIcon(
-                        QIcon(resource_path("Icon/status_warning.svg"))
+                        QIcon(resource_path("icon/status_warning.svg"))
                     )
             else:
-                self.tray_icon.setIcon(QIcon(resource_path("Icon/status_warning.svg")))
+                self.tray_icon.setIcon(QIcon(resource_path("icon/status_warning.svg")))
                 tooltip += "\n"
                 tooltip += "\n- 当前端口不可用！"
                 tooltip += "\n- 请打开 {} 代理软件".format(port_name)
@@ -220,7 +229,7 @@ class MainWindow:
             status_label_text = '<span style="color: gray;">git代理已禁用</span>'
             proxy_button_text = "启用git代理"
             self.ui.proxyButton.setChecked(True)
-            self.tray_icon.setIcon(QIcon(resource_path("Icon/status_off.svg")))
+            self.tray_icon.setIcon(QIcon(resource_path("icon/status_off.svg")))
 
         tooltip += "\n\n左键点击: git代理开关"
         tooltip += "\n右键点击: 快捷菜单"
@@ -231,11 +240,14 @@ class MainWindow:
 
     def get_git_proxy_status(self) -> Tuple[bool, Optional[str]]:
         try:
+            creationflags = (
+                subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+            )
             result = subprocess.run(
                 ["git", "config", "--global", "http.proxy"],
                 capture_output=True,
                 text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW,
+                creationflags=creationflags,
             )
             if result.returncode == 0 and result.stdout.strip():
                 proxy_url = result.stdout.strip()  # http://127.0.0.1:10808
@@ -258,26 +270,29 @@ class MainWindow:
 
     def set_git_proxy(self, switch: bool = True, port: int = None):
         """设置/取消git代理"""
+        creationflags = (
+            subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+        )
         if switch:
             # 启用git代理
             proxy_url = f"http://127.0.0.1:{port}"
             subprocess.run(
                 ["git", "config", "--global", "http.proxy", proxy_url],
-                creationflags=subprocess.CREATE_NO_WINDOW,
+                creationflags=creationflags,
             )
             subprocess.run(
                 ["git", "config", "--global", "https.proxy", proxy_url],
-                creationflags=subprocess.CREATE_NO_WINDOW,
+                creationflags=creationflags,
             )
         else:
             # 禁用git代理
             subprocess.run(
                 ["git", "config", "--global", "--unset", "http.proxy"],
-                creationflags=subprocess.CREATE_NO_WINDOW,
+                creationflags=creationflags,
             )
             subprocess.run(
                 ["git", "config", "--global", "--unset", "https.proxy"],
-                creationflags=subprocess.CREATE_NO_WINDOW,
+                creationflags=creationflags,
             )
 
     def toggle_proxy(self, editMode=False):
@@ -395,6 +410,8 @@ class MainWindow:
 
     def toggle_auto_start(self):
         """设置/取消开机自启"""
+        if platform.system() != "Windows" or not winreg:
+            return  # 非 Windows 系统不支持此功能
         key = winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
             r"Software\Microsoft\Windows\CurrentVersion\Run",
@@ -425,6 +442,10 @@ class MainWindow:
 
     def check_auto_start_status(self):
         """检查开机自启状态"""
+        if platform.system() != "Windows" or not winreg:
+            self.auto_start_button.setChecked(False)
+            self.auto_start_button.setVisible(False)
+            return
         try:
             key = winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
