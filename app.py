@@ -1,5 +1,7 @@
 # app.py
 import concurrent.futures
+from errno import EKEYEXPIRED
+from math import e
 import os
 import platform
 import socket
@@ -104,8 +106,27 @@ class MainWindow:
             "SingBox": "10809",
         }
 
+        # 检查是否为Linux系统
+        self.is_linux = platform.system() == "Linux"
+
+        # 初始化UI相关属性为None，防止在Linux下引用未初始化的属性
+        self.ui = None
+        self.status_label = None
+        self.proxy_button = None
+        self.port_input = None
+        self.port_list_button = None
+        self.auto_start_button = None
+        self.exit_button = None
+
+        # 初始化Linux特定菜单项
+        self.status_action = None
+        self.toggle_proxy_action = None
+
         # 创建托盘菜单
-        self.create_tray_menu()
+        if self.is_linux:
+            self.create_linux_tray_menu()
+        else:
+            self.create_tray_menu()
 
         # 创建系统托盘图标
         self.setup_tray()
@@ -115,8 +136,7 @@ class MainWindow:
 
         # 检查开机自启状态
         if platform.system() != "Windows":
-            self.auto_start_button.setEnabled(False)
-            self.auto_start_button.setVisible(False)
+            return
         else:
             self.check_auto_start_status()
 
@@ -170,61 +190,123 @@ class MainWindow:
 
     def setup_connections(self):
         """设置信号连接"""
-        self.ui.proxyButton.clicked.connect(self.toggle_proxy)
-        self.ui.portInput.editingFinished.connect(self.update_port)
-        self.ui.portListButton.clicked.connect(self.show_port_list)
-        self.ui.autoStartButton.clicked.connect(self.toggle_auto_start)
-        self.ui.exitButton.clicked.connect(QApplication.instance().quit)
-
-    # def on_tray_icon_activated(self, reason):
-    #     """处理托盘图标激活事件"""
-    #     if reason == QSystemTrayIcon.ActivationReason.Context:
-    #         geometry = self.tray_icon.geometry()
-    #         self.tray_menu.popup(
-    #             QPoint(geometry.x(), geometry.y() - self.tray_menu.height())
-    #         )
-    #     elif reason == QSystemTrayIcon.ActivationReason.Trigger:
-    #         self.proxy_button.setChecked(not self.proxy_button.isChecked())
-    #         self.toggle_proxy()
+        if not self.is_linux:
+            # Windows下使用自定义UI控件的连接
+            self.ui.proxyButton.clicked.connect(self.toggle_proxy)
+            self.ui.portInput.editingFinished.connect(self.update_port)
+            self.ui.portListButton.clicked.connect(self.show_port_list)
+            self.ui.autoStartButton.clicked.connect(self.toggle_auto_start)
+            self.ui.exitButton.clicked.connect(QApplication.instance().quit)
 
     def on_tray_icon_activated(self, reason):
         """处理托盘图标激活事件"""
         if reason == QSystemTrayIcon.ActivationReason.Context:
-            geometry = self.tray_icon.geometry()
-            cursor_pos = QCursor.pos()  # 获取光标位置作为备选
-
-            if platform.system() == "Windows":
-                # Windows: 菜单显示在图标上方
-                popup_point = QPoint(
-                    geometry.x(), geometry.y() - self.tray_menu.height()
-                )
+            # 右键点击 - 显示菜单
+            # 在Linux系统上，手动定位菜单位置
+            if self.is_linux:
+                cursor_pos = QCursor.pos()
+                self.tray_menu.popup(cursor_pos)
             else:
-                # Linux: 菜单显示在图标下方
-                popup_point = QPoint(geometry.x(), geometry.y() + geometry.height())
-
-                # 如果几何信息看起来不正确，使用光标位置
-                if geometry.isNull() or geometry.x() == 0 and geometry.y() == 0:
-                    popup_point = cursor_pos
-
-            self.tray_menu.popup(popup_point)
+                geometry = self.tray_icon.geometry()
+                self.tray_menu.popup(
+                    QPoint(geometry.x(), geometry.y() - self.tray_menu.height())
+                )
         elif reason == QSystemTrayIcon.ActivationReason.Trigger:
-            self.proxy_button.setChecked(not self.proxy_button.isChecked())
-            self.toggle_proxy()
+            # 左键单击
+            if self.is_linux:
+                # Linux下直接切换代理状态并显示菜单
+                self.toggle_proxy()
+            else:
+                # Windows下使用UI控件的点击状态
+                self.proxy_button.setChecked(not self.proxy_button.isChecked())
+                self.toggle_proxy()
 
-    # # 直接使用光标位置
-    # def on_tray_icon_activated(self, reason):
-    #     """处理托盘图标激活事件"""
-    #     if reason == QSystemTrayIcon.ActivationReason.Context:
-    #         cursor_pos = QCursor.pos()  # 获取当前光标位置
-    #         self.tray_menu.popup(cursor_pos)
-    #     elif reason == QSystemTrayIcon.ActivationReason.Trigger:
-    #         self.proxy_button.setChecked(not self.proxy_button.isChecked())
-    #         self.toggle_proxy()
+    def create_linux_tray_menu(self):
+        """为Linux创建特殊处理的托盘菜单"""
+        self.tray_menu = QMenu()
+
+        # 为Linux设置特定样式
+        self.tray_menu.setStyleSheet(
+            """
+            QMenu {
+                background-color: #ffffff;
+                color: #000000;
+                border: 1px solid #cccccc;
+                min-width: 250px;
+                padding: 5px;
+            }
+            QMenu::item {
+                padding: 5px 10px;
+            }
+            QMenu::item:selected {
+                background-color: #e0e0e0;
+            }
+            """
+        )
+
+        # 创建普通菜单项而不是自定义控件
+        # 状态文本显示
+        self.status_action = QAction("代理状态: 未启用", self.tray_menu)
+        self.status_action.setEnabled(False)
+        self.tray_menu.addAction(self.status_action)
+
+        self.tray_menu.addSeparator()
+
+        # 切换代理按钮
+        self.toggle_proxy_action = QAction("启用git代理", self.tray_menu)
+        self.toggle_proxy_action.triggered.connect(self.toggle_proxy)
+        self.tray_menu.addAction(self.toggle_proxy_action)
+
+        # 端口设置
+        port_menu = QMenu("设置端口", self.tray_menu)
+        self.tray_menu.addMenu(port_menu)
+
+        # 添加预设端口
+        for name, port in self.preset_port.items():
+            action = QAction(f"{name}: {port}", port_menu)
+            action.triggered.connect(lambda checked, p=port: self.set_port(p))
+            port_menu.addAction(action)
+
+        self.tray_menu.addSeparator()
+
+        # 添加退出选项
+        self.exit_action = QAction("退出", self.tray_menu)
+        self.exit_action.triggered.connect(QApplication.instance().quit)
+        self.tray_menu.addAction(self.exit_action)
+
+    def update_linux_menu_status(self, git_proxy_enabled: bool, port: int = None):
+        """更新Linux菜单状态"""
+        port = port if port is not None else self.current_port
+        proxy_url = f"http://127.0.0.1:{port}"
+
+        if git_proxy_enabled:
+            self.status_action.setText(f"代理状态: 已启用 ({proxy_url})")
+            self.toggle_proxy_action.setText("禁用git代理")
+            proxy_running, proxy_name, proxy_port = self._detect_proxy_port()
+            if proxy_running:
+                if int(proxy_port) == int(port):
+                    self.tray_icon.setIcon(QIcon(resource_path("icon/status_ok.svg")))
+                else:
+                    self.tray_icon.setIcon(
+                        QIcon(resource_path("icon/status_warning.svg"))
+                    )
+            else:
+                self.tray_icon.setIcon(QIcon(resource_path("icon/status_warning.svg")))
+        else:
+            self.status_action.setText("代理状态: 已禁用")
+            self.toggle_proxy_action.setText("启用git代理")
+            self.tray_icon.setIcon(QIcon(resource_path("icon/status_off.svg")))
 
     def update_git_proxy_status_and_tooltip(
         self, git_proxy_enabled: bool, port: int = None, editMode=False
     ):
         """更新git代理状态和提示信息"""
+        if self.is_linux:
+            # Linux系统下更新菜单状态
+            self.update_linux_menu_status(git_proxy_enabled, port)
+            return
+
+        # 以下是Windows系统的处理逻辑
         port = port if port is not None else self.current_port
         proxy_url = f"http://127.0.0.1:{port}"
         self.ui.portInput.setText(str(port))
@@ -298,9 +380,17 @@ class MainWindow:
         proxy_running, port_name_openning, port_openning = self._detect_proxy_port()
         if proxy_running:
             self.set_git_proxy(True, port_openning)
-            self.update_git_proxy_status_and_tooltip(True, port_openning)
+            if self.is_linux:
+                self.update_linux_menu_status(True, port_openning)
+            else:
+                self.update_git_proxy_status_and_tooltip(True, port_openning)
         else:
-            self.update_git_proxy_status_and_tooltip(git_proxy_enabled, current_port)
+            if self.is_linux:
+                self.update_linux_menu_status(git_proxy_enabled, current_port)
+            else:
+                self.update_git_proxy_status_and_tooltip(
+                    git_proxy_enabled, current_port
+                )
 
     def set_git_proxy(self, switch: bool = True, port: int = None):
         """设置/取消git代理"""
@@ -332,24 +422,44 @@ class MainWindow:
     def toggle_proxy(self, editMode=False):
         """切换git代理事件"""
         try:
-            if self.ui.proxyButton.isChecked():
-                # 禁用git代理并更新标签和提示信息
-                self.set_git_proxy(False)
-                self.update_git_proxy_status_and_tooltip(False)
+            # 获取当前代理状态
+            git_proxy_enabled, _ = self.get_git_proxy_status()
+
+            if self.is_linux:
+                # Linux系统下的处理
+                if git_proxy_enabled:
+                    # 当前已启用，则禁用
+                    self.set_git_proxy(False)
+                    self.update_linux_menu_status(False)
+                else:
+                    # 当前已禁用，则启用
+                    self.set_git_proxy(True, self.current_port)
+                    self.update_linux_menu_status(True, self.current_port)
             else:
-                # 启用git代理并更新标签和提示信息
-                self.set_git_proxy(True, self.current_port)
-                self.update_git_proxy_status_and_tooltip(
-                    True, self.current_port, editMode
-                )
+                # Windows系统下的处理
+                if self.ui.proxyButton.isChecked():
+                    # 禁用git代理并更新标签和提示信息
+                    self.set_git_proxy(False)
+                    self.update_git_proxy_status_and_tooltip(False)
+                else:
+                    # 启用git代理并更新标签和提示信息
+                    self.set_git_proxy(True, self.current_port)
+                    self.update_git_proxy_status_and_tooltip(
+                        True, self.current_port, editMode
+                    )
         except (subprocess.SubprocessError, OSError) as e:
             print(f"操作失败: {str(e)}")
-            self.ui.statusLabel.setText(
-                f'<span style="color: red;">操作失败: {str(e)}</span>'
-            )
+            if not self.is_linux:
+                self.ui.statusLabel.setText(
+                    f'<span style="color: red;">操作失败: {str(e)}</span>'
+                )
 
     def update_port(self):
         """更新git端口设置"""
+        if self.is_linux:
+            # Linux系统下通过菜单已经完成端口设置
+            return
+
         try:
             port = self.ui.portInput.text()
             # 检查是否为空或非数字
@@ -384,6 +494,10 @@ class MainWindow:
 
     def show_port_list(self):
         """显示端口列表"""
+        if self.is_linux:
+            # Linux系统下已通过菜单实现端口列表
+            return
+
         menu = QMenu(self.port_list_button)  # 确保 QMenu 的父对象正确
         menu.setStyleSheet(
             """
@@ -439,8 +553,14 @@ class MainWindow:
 
     def set_port(self, port):
         """设置端口并更新"""
-        self.port_input.setText(port)
-        self.update_port()
+        if self.is_linux:
+            # Linux系统下已通过菜单实现端口列表
+            self.current_port = port
+            self.set_git_proxy(port=self.current_port)
+            self.update_linux_menu_status(git_proxy_enabled=True, port=self.current_port)
+        else:
+            self.port_input.setText(port)
+            self.update_port()
 
     def toggle_auto_start(self):
         """设置/取消开机自启"""
@@ -503,6 +623,9 @@ class MainWindow:
 
     def _check_system_proxy(self) -> bool:
         """检查系统代理是否开启"""
+        if platform.system() != "Windows" or not winreg:
+            return False  # 非Windows系统暂不支持检测系统代理
+
         try:
             key = winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
