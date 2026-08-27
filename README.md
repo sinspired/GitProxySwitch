@@ -60,7 +60,7 @@ self.default_port = 10808
 self.preset_port = {
     "V2Ray": "10808",
     "Clash": "7890",
-    "SingBox": "10809",
+    "SingBox": "60011",
     "NewProxy": "12345",  # 新增端口
 }
 ```
