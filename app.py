@@ -39,8 +39,7 @@ class ContextMenuWidget(QWidget):
 
     def setup_style(self):
         """设置控件样式"""
-        self.ui.proxyButton.setStyleSheet(
-            """
+        self.ui.proxyButton.setStyleSheet("""
             #proxyButton {
                 border-radius: 0px;
                 background-color:rgba(161, 58, 58, 0.39);
@@ -48,11 +47,9 @@ class ContextMenuWidget(QWidget):
             #proxyButton:checked {
                 background-color: rgb(0, 197, 144);
             }
-            """
-        )
+            """)
 
-        self.ui.autoStartButton.setStyleSheet(
-            """
+        self.ui.autoStartButton.setStyleSheet("""
             #autoStartButton {
                 border-radius: 0px;
                 background-color: transparent;
@@ -64,11 +61,9 @@ class ContextMenuWidget(QWidget):
                 background-color: rgba(130, 130, 130, 0.08);
                 color: #836d6d;
             }
-            """
-        )
+            """)
 
-        self.ui.exitButton.setStyleSheet(
-            """
+        self.ui.exitButton.setStyleSheet("""
             #exitButton {
                 border-radius: 0px;
                 background-color: transparent;
@@ -76,8 +71,7 @@ class ContextMenuWidget(QWidget):
             #exitButton:hover {
                 background-color: rgba(130, 130, 130, 0.08);
             }
-            """
-        )
+            """)
 
 
 class ContextMenuAction(QWidgetAction):
@@ -101,7 +95,7 @@ class MainWindow:
         self.preset_port: Dict[str, str] = {
             "V2Ray": "10808",
             "Clash": "7890",
-            "SingBox": "10809",
+            "SingBox": "60011",
         }
 
         # 检查是否为Linux系统
@@ -148,13 +142,11 @@ class MainWindow:
     def create_tray_menu(self):
         """创建托盘菜单"""
         self.tray_menu = QMenu()
-        self.tray_menu.setStyleSheet(
-            """
+        self.tray_menu.setStyleSheet("""
             QMenu {
             border-radius: 0px;
             }
-            """
-        )
+            """)
         if self.is_linux:
             self.setup_linux_menu()
         else:
@@ -268,7 +260,8 @@ class MainWindow:
         if git_proxy_enabled:
             self.status_action.setText(f"代理状态: 已启用 ({proxy_url})")
             self.toggle_proxy_action.setText("禁用git代理")
-            proxy_running, proxy_name, proxy_port = self._detect_proxy_port()
+            # 将当前要验证的端口传入检测函数
+            proxy_running, proxy_name, proxy_port = self._detect_proxy_port(port)
             if proxy_running:
                 if int(proxy_port) == int(port):
                     self.tray_icon.setIcon(QIcon(resource_path("icon/status_ok.svg")))
@@ -291,6 +284,7 @@ class MainWindow:
         proxy_url = f"http://127.0.0.1:{port}"
         self.ui.portInput.setText(str(port))
         port_name = {v: k for k, v in self.preset_port.items()}.get(str(port), "其他")
+
         tooltip = "Git Proxy Switch"
         tooltip += "\n端口: {}".format(port)
 
@@ -298,7 +292,8 @@ class MainWindow:
             tooltip += "\n状态: 已启用"
             tooltip += "\n代理: {}".format(proxy_url)
 
-            proxy_running, proxy_name, proxy_port = self._detect_proxy_port()
+            # 将当前要验证的端口传入检测函数
+            proxy_running, proxy_name, proxy_port = self._detect_proxy_port(port)
             if proxy_running:
                 if int(proxy_port) == int(port):
                     self.tray_icon.setIcon(QIcon(resource_path("icon/status_ok.svg")))
@@ -357,7 +352,11 @@ class MainWindow:
     def init_git_proxy_status_and_tooltip(self):
         """初始化git代理状态和提示信息"""
         git_proxy_enabled, current_port = self.get_git_proxy_status()
-        proxy_running, port_name_openning, port_openning = self._detect_proxy_port()
+
+        # 启动时携带当前可能存在的端口进行检测
+        proxy_running, port_name_openning, port_openning = self._detect_proxy_port(
+            current_port
+        )
         if proxy_running:
             self.set_git_proxy(True, port_openning)
             self.update_menu_status(True, port_openning)
@@ -457,8 +456,7 @@ class MainWindow:
             return
 
         menu = QMenu(self.port_list_button)  # 确保 QMenu 的父对象正确
-        menu.setStyleSheet(
-            """
+        menu.setStyleSheet("""
             QMenu {
                 border-radius: 6px;
             }
@@ -471,8 +469,7 @@ class MainWindow:
             QMenu::item:selected {
                 background-color: rgba(130, 130, 130, 0.08);
             }
-            """
-        )
+            """)
 
         # 自定义标题行
         title_widget = QWidgetAction(menu)
@@ -591,30 +588,56 @@ class MainWindow:
         except Exception:
             return False
 
-    def _detect_proxy_port(self) -> Tuple[bool, Optional[str], Optional[str]]:
-        """并发检测可用的代理端口"""
+    def _detect_proxy_port(
+        self, target_port: int = None
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """并发检测可用的代理端口（修复版）"""
 
         def check_port(name, port):
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.settimeout(0.1)
+                    # 适当延长超时时间到0.5秒，避免网络波动导致验证失败（本地通信0.5s足够且不会卡顿）
+                    sock.settimeout(0.5)
                     if sock.connect_ex(("127.0.0.1", int(port))) == 0:
                         return True, name, port
             except Exception:
                 pass
             return False, None, None
 
+        ports_to_check = self.preset_port.copy()
+
+        # 将目标端口（如手动填写的端口）加入到检测列表中
+        if target_port is not None:
+            target_port_str = str(target_port)
+            if target_port_str not in ports_to_check.values():
+                ports_to_check["自定义"] = target_port_str
+
+        open_ports = {}
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_port = {
                 executor.submit(check_port, name, port): (name, port)
-                for name, port in self.preset_port.items()
+                for name, port in ports_to_check.items()
             }
+            # 等待所有检测完毕再做决策，不再“找到一个就退出”
             for future in concurrent.futures.as_completed(future_to_port):
                 success, name, port = future.result()
                 if success:
-                    return True, name, port
+                    open_ports[str(port)] = name
 
-        return False, None, None
+        # 如果完全没有端口存活
+        if not open_ports:
+            return False, None, None
+
+        # 如果检测出多个活端口，且我们传入的目标端口也是活的，优先返回我们正要使用的目标端口
+        if target_port is not None:
+            target_port_str = str(target_port)
+            if target_port_str in open_ports:
+                return True, open_ports[target_port_str], target_port_str
+
+        # 否则，返回任意一个确认存活的端口（做 Fallback 兼容）
+        port = next(iter(open_ports.keys()))
+        name = open_ports[port]
+        return True, name, port
 
 
 def resource_path(relative_path):
