@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'ContextMenu.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.2
+## Created by: Qt User Interface Compiler version 6.11.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -122,6 +122,7 @@ class Ui_ContextMenuWidget(object):
         self.portInput.setMaximumSize(QSize(100, 24))
         self.portInput.setTabletTracking(True)
         self.portInput.setAutoFillBackground(False)
+        self.portInput.setLocale(QLocale(QLocale.Chinese, QLocale.China))
         self.portInput.setInputMethodHints(Qt.InputMethodHint.ImhPreferNumbers)
         self.portInput.setText(u"10808")
         self.portInput.setMaxLength(5)
@@ -158,6 +159,7 @@ class Ui_ContextMenuWidget(object):
         self.autoStartButton.setObjectName(u"autoStartButton")
         self.autoStartButton.setMinimumSize(QSize(180, 30))
         self.autoStartButton.setMaximumSize(QSize(200, 16777215))
+        self.autoStartButton.setLocale(QLocale(QLocale.Chinese, QLocale.China))
         self.autoStartButton.setCheckable(True)
         self.autoStartButton.setFlat(False)
 
