@@ -146,6 +146,7 @@ class MainWindow:
         self.preset_port: Dict[str, str] = {
             "V2Ray": "10808",
             "Clash": "7890",
+            "Mihomo": "10801",
             "SingBox": "60011",
         }
 

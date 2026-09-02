@@ -36,3 +36,5 @@ debhelper-build-stamp
 
 # 下方文件包含进仓库
 !README_template.md
+
+.wiki/
