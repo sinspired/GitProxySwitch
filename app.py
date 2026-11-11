@@ -148,6 +148,7 @@ class MainWindow:
             "Clash": "7890",
             "Mihomo": "10801",
             "SingBox": "60011",
+            "Throne" : "2080"
         }
 
         self.is_linux = platform.system() == "Linux"
